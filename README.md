@@ -1,57 +1,150 @@
----
+<div align="center">
 
 # 🚀 Sanchvex
 
-A hyper-optimized backend core data engine designed to solve the **Data Drift** and **Scale Degradation** problems across high-volume catalogs. Sanchvex efficiently processes cursor-paginated data manipulation over large datasets, maintaining constant execution times and deterministic sorting consistency.
+### High-Volume Catalog Engine for Drift-Resistant Cursor Pagination
 
-* **Live Interactive UI Dashboard:** [sanchvex-backend.onrender.com](https://www.google.com/search?q=https://sanchvex-backend.onrender.com/)
-* **Production API Endpoint:** `https://sanchvex-backend.onrender.com/api/products?limit=12`
+**Built for deterministic sorting, deep pagination, and large dataset handling**
+
+<br>
+
+![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js)
+![Fastify](https://img.shields.io/badge/Fastify-Core-black?style=for-the-badge&logo=fastify)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql)
+![API](https://img.shields.io/badge/API-Catalog%20Engine-blue?style=for-the-badge)
+![Pagination](https://img.shields.io/badge/Pagination-Cursor--Based-purple?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Production%20Prototype-success?style=for-the-badge)
+
+</div>
+
+> Sanchvex is a backend catalog engine designed to keep pagination stable under heavy data growth, concurrent inserts, and deep scrolling workflows.
 
 ---
 
-## ⚡ Core Engineering Achievements
+# 🧠 Overview
 
-* **Zero-Drift Consistency Engine:** Eliminates skipped or duplicate item abnormalities caused by real-time concurrent dataset mutations during active scrolling.
-* **Constant Time Pagination $O(\log N)$:** Bypasses costly linear dataset traversal overhead characteristic of traditional SQL `OFFSET` operations.
-* **High-Velocity Data Seeding Engine:** Pushes bulk records through grouped 10,000-row batch vectors, handling large datasets in seconds.
-* **Opaque Tokenization Architecture:** Obfuscates database structures and state properties into web-safe Base64 alphanumeric payloads.
+Sanchvex solves two common problems in high-volume catalog systems:
+
+- **data drift** during active browsing
+- **scale degradation** when users move through large datasets
+
+Instead of offset pagination, Sanchvex uses **cursor-based navigation** with deterministic sorting. This keeps page boundaries stable even when new rows are inserted while a user is browsing.
+
+The system is optimized for:
+
+- large product catalogs
+- deep pagination
+- stable ordering
+- fast bulk seeding
+- repeatable API responses
 
 ---
 
-## 🏗️ System Architecture & Mathematical Logic
+# 🎯 Problem Statement
 
-### The Mitigation of Data Drift
+Traditional `LIMIT / OFFSET` pagination becomes unreliable at scale.
 
-Traditional offset pagination uses linear index skips (`LIMIT 20 OFFSET 40`). If entries are inserted concurrently by other transactions, rows shift dynamically across page margins, forcing clients to experience severe duplication or data omission gaps.
+When rows are inserted or deleted between requests:
 
-Sanchvex resolves this by using an immutable cursor index boundary baseline. The pointer anchors directly onto specific unique database row records, maintaining chronological sorting integrity regardless of overhead structural data movements.
+- users may see duplicates
+- items may be skipped
+- page boundaries shift
+- deep pagination becomes slower
+
+This is a serious problem in live catalog systems where consistency matters more than simple page slicing.
+
+---
+
+# 💡 Solution
+
+Sanchvex uses a **cursor-based pagination model** anchored on immutable row boundaries.
+
+The approach combines:
+
+- timestamp ordering
+- unique ID tie-breaking
+- composite indexing
+- opaque cursor tokens
+- batch ingestion for large data seeding
+
+This gives the API a stable browsing experience across large and changing datasets.
+
+---
+
+# 🏗️ Core Architecture
+
+```text
+Client Request
+      ↓
+Fastify Route
+      ↓
+Cursor Decoder
+      ↓
+Deterministic Sort Filter
+      ↓
+PostgreSQL Indexed Lookup
+      ↓
+Next Cursor Generation
+      ↓
+JSON Response
+````
+
+---
+
+# ⚡ Core Engineering Features
+
+## Cursor-Based Pagination
+
+* designed for stable browsing through large catalogs
+* prevents duplicate and skipped items caused by shifting offsets
+* supports deep navigation without scanning every earlier row
+
+## Deterministic Sorting
+
+Records are ordered using:
+
+* `created_at`
+* `id` as a tie-breaker
+
+This makes ordering predictable even when timestamps match.
+
+## High-Volume Batch Seeding
+
+* inserts records in large chunks
+* reduces overhead compared to row-by-row insertion
+* suitable for testing large catalog volumes
+
+## Opaque Cursor Tokens
+
+* cursor state is encoded into web-safe tokens
+* keeps API requests compact
+* hides raw pagination boundary values from clients
+
+## Category Filtering
+
+* supports browsing by product category
+* works cleanly with cursor pagination
+* maintains stable ordering within filtered results
+
+---
+
+# 🧮 Pagination Logic
+
+When two rows share the same timestamp, Sanchvex applies a compound boundary rule:
 
 ```
-Traditional Offset Pagination (Volatile):
-[Item 1] [Item 2] [Item 3] [Item 4] ---> Insert [New Item] ---> Elements shift down! 
-                                                                (User views duplicates)
-
-Sanchvex Cursor Pagination (Anchored):
-[Item 1] [Item 2] [Item 3] (Cursor Link) ---> Insert [New Item] ---> Pointer stays fixed!
-                                                                      (Seamless Navigation)
+(created_at < \text{cursor_timestamp}) \lor (created_at = \text{cursor_timestamp} \land id < \text{cursor_id})
 
 ```
-
-### Mathematical Logic Rule
-
-To evaluate pagination criteria deterministically when records share identical millisecond-level timestamps, Sanchvex applies a compound query filtering algorithm matching this exact relation:
-
-$$(created\_at < \text{Cursor Timestamp}) \lor (created\_at = \text{Cursor Timestamp} \land id < \text{Cursor ID})$$
-
-This multi-column logical criteria sequence guarantees exact pagination behavior across millions of overlapping timestamps.
+This ensures that pagination remains deterministic even when many records are created within the same time window.
 
 ---
 
-## 💾 Optimized Relational Data Modeling
+# 💾 Database Design
 
-The system bypasses heavy Object-Relational Mapping (ORM) translation layers, executing pure PostgreSQL Data Definition Language (DDL) directly over optimized B-Tree configurations.
+Sanchvex uses PostgreSQL with optimized indexing for cursor-based browsing.
 
-### Database Table Schema
+## Table Structure
 
 ```sql
 CREATE TABLE products (
@@ -62,154 +155,72 @@ CREATE TABLE products (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 ```
 
-### Composite Index Design Strategies
-
-To achieve rapid index scan executions, the columns inside our composite indices are structured strictly from **highest selectivity** to **lowest selectivity**.
+## Index Strategy
 
 ```sql
--- Index optimization path for categorized browsing layouts
-CREATE INDEX idx_products_category_created_id 
+CREATE INDEX idx_products_category_created_id
 ON products (category, created_at DESC, id DESC);
 
--- Index optimization path for global un-categorized browsing layouts
-CREATE INDEX idx_products_created_id 
+CREATE INDEX idx_products_created_id
 ON products (created_at DESC, id DESC);
-
 ```
 
-> **Engineering Design Detail:** Including `id DESC` serves as a bulletproof tie-breaker constraint. When two items contain identical `created_at` values, the index uses the unique incremental identifier to enforce strict ordering.
+These indexes support:
+
+* fast lookup by category
+* stable ordering
+* efficient cursor-based reads
+* deterministic tie resolution
 
 ---
 
-## 🏎️ Performance Metrics & Evaluation
+# 📈 Performance Notes
 
-| Pagination Method | Complexity (First Page) | Complexity (Deep Pages, e.g., Page 5,000) | Data Drift Stability |
-| --- | --- | --- | --- |
-| **Traditional Offset** | $O(1)$ | $O(N)$ — Reads all preceding rows line-by-line | Volatile (Causes Duplicates/Skips) |
-| **Sanchvex Cursor** | $O(\log N)$ | **$O(\log N)$ — Lightning fast execution** | **Bulletproof (Immutably Anchored)** |
+| Pagination Method |     First Page |               Deep Pages | Stability       |
+| ----------------- | -------------: | -----------------------: | --------------- |
+| Offset Pagination | Fast initially | Slows down as pages grow | Volatile        |
+| Cursor Pagination |           Fast | Stable for deep browsing | Drift-resistant |
 
-### High-Volume Batch Seeding Execution
-
-Executing individual sequential standard input instructions creates massive network I/O lag over the wire. Sanchvex addresses this via a multi-row query matrix loader, combining elements into high-speed array blocks.
-
-```
-[Sanchvex Seeding Engine Started]
--> Clearing any existing data from products table...
--> Generating and inserting 200000 records in chunks of 10000...
--> Successfully batch-inserted records: 50000 / 200000
--> Successfully batch-inserted records: 100000 / 200000
--> Successfully batch-inserted records: 150000 / 200000
--> Successfully batch-inserted records: 200000 / 200000
-🎉 Seeding completed successfully on Sanchvex!
-
-```
+Sanchvex is designed to keep browsing consistent even when the underlying dataset changes during active use.
 
 ---
 
-## 🛠️ Local Installation & Setup
+# 🧪 Validation Workflow
 
-Follow these steps to run the Sanchvex environment locally.
+The repository includes automated drift testing to verify stability under data mutation.
 
-### Prerequisite Checklist
-
-* Node.js runtime engine installed (v20+ recommended)
-* A live local or cloud-hosted PostgreSQL instance (e.g., Neon.tech)
-
-### 1. Clone the Codebase
-
-```bash
-git clone https://github.com/ashhuxt/sanchvex-backend.git
-cd sanchvex-backend
-
-```
-
-### 2. Dependency Sourcing
-
-```bash
-npm install
-
-```
-
-### 3. Environment Environment Configurations
-
-Create a `.env` file in the project's root folder:
-
-```env
-DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
-PORT=3000
-
-```
-
-### 4. Execute Dataset Hydration Seeding Script
-
-```bash
-node seed.js
-
-```
-
-### 5. Boot Up the Fastify Engine
-
-```bash
-node server.js
-
-```
-
-The server will boot up and expose the interface on your local loopback address: `http://localhost:3000/`
-
----
-
-## 🧪 Automated Data Drift Validation Testing
-
-To programmatically prove data integrity under highly volatile data conditions, run the automated integration validation script:
+Typical validation flow:
 
 ```bash
 node test-drift.js
-
 ```
 
-### Validation Test Log Output Proof:
+Expected behavior:
 
-```
---- Starting Sanchvex Data Drift Verification ---
-
-[User Action] Fetching Page 1 (Limit: 5)...
-Page 1 Items Received:
- -> ID: 1 | Name: Product Item 0 | Created At: 2026-06-22T17:35:36.197Z
- -> ID: 2 | Name: Product Item 1 | Created At: 2026-06-22T17:34:36.198Z
- 
-[System Event] Drift alert! Injecting 3 brand new items into the database...
-✅ 3 new records successfully committed to Neon.
-
-[User Action] Fetching Page 2 using the cursor token...
-Page 2 Items Received:
- -> ID: 6 | Name: Product Item 5 | Created At: 2026-06-22T17:30:36.198Z
- -> ID: 7 | Name: Product Item 6 | Created At: 2026-06-22T17:29:36.198Z
-
-🎉 VALIDATION SUCCESS: Zero duplicate items encountered!
-The cursor system anchored seamlessly. Data drift handled perfectly.
-
-```
+* fetch one page
+* inject new rows
+* fetch next page using cursor
+* confirm no duplicates or gaps
 
 ---
 
-## 🌐 Production API Contract Specification
+# 🌐 API Contract
 
-### `GET /api/products`
+## `GET /api/products`
 
-Retrieves a list of paginated catalog data sorted by newest items first.
+Returns paginated catalog data sorted by newest records first.
 
-#### Request Parameters
+### Query Parameters
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `limit` | Integer | Optional | Number of elements returned (Default: 20, Max Guardrail: 100). |
-| `category` | String | Optional | Filters the dataset by a target product classification. |
-| `cursor` | String | Optional | The opaque Base64 tracking string indicating the previous page boundary. |
+| Parameter  | Type    | Description                  |
+| ---------- | ------- | ---------------------------- |
+| `limit`    | integer | Number of items to return    |
+| `category` | string  | Optional category filter     |
+| `cursor`   | string  | Opaque cursor boundary token |
 
-#### Successful JSON Payload Schema (`200 OK`)
+### Example Response
 
 ```json
 {
@@ -225,13 +236,163 @@ Retrieves a list of paginated catalog data sorted by newest items first.
   "nextCursor": "MjAyNi0wNi0yMlQxNzowMDowMC4wMDBaXzE0NTAw",
   "hasNextPage": true
 }
-
 ```
 
 ---
 
-## 👨‍💻 Contributor Profile
+# 🛠️ Tech Stack
 
-* **Developer:** Ashish Patel
-* **Academic Focus:** Computer Science and Engineering (3rd Year Student)
-* **Contact/Review:** `siddharth@codevector.in`
+| Layer               | Technology                                       |
+| ------------------- | ------------------------------------------------ |
+| Runtime Engine      | Node.js (v20+)                                   |
+| API Framework       | Fastify (Low-Overhead, High-Throughput REST)     |
+| Database Server     | PostgreSQL (Serverless Neon Pooler)              |
+| Pagination Strategy | Deep Cursor-based Opaque Tokenization            |
+| Data Ingestion      | Batch-Vector Seeding Optimization (`B = 10,000`) |
+| Cloud Hosting       | Render Containers                                |
+
+---
+
+# 📂 Project Structure
+
+```text
+sanchvex-backend/
+├── public/
+│   └── index.html
+├── .env
+├── .gitignore
+├── package.json
+├── seed.js
+├── server.js
+└── test-drift.js
+```
+
+---
+
+# 🚀 Local Setup
+
+## Prerequisites
+
+* Node.js 20+
+* PostgreSQL database
+* npm
+
+## 1) Clone the Repository
+
+```bash
+git clone https://github.com/ashhuxt/sanchvex-backend.git
+cd sanchvex-backend
+```
+
+## 2) Install Dependencies
+
+```bash
+npm install
+```
+
+## 3) Configure Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
+PORT=3000
+```
+
+## 4) Seed the Database
+
+```bash
+node seed.js
+```
+
+## 5) Start the Server
+
+```bash
+node server.js
+```
+
+The API will be available at:
+
+```text
+http://localhost:3000/
+```
+
+---
+
+# 🔍 Drift Validation
+
+Run the drift test to verify that pagination remains stable even when new data is inserted between page requests:
+
+```bash
+node test-drift.js
+```
+
+This test checks that:
+
+* cursor boundaries remain stable
+* duplicate rows do not appear
+* rows are not skipped during scrolling
+* ordering stays deterministic
+
+---
+
+# 📡 Production Endpoints
+
+## API Endpoint
+
+```text
+https://sanchvex-backend.onrender.com/api/products?limit=12
+```
+
+## Live Interactive UI
+
+```text
+https://sanchvex-backend.onrender.com
+```
+
+---
+
+# ⚠️ Current Limitations
+
+Sanchvex is intentionally focused on core catalog pagination and consistency. Areas that can be extended later include:
+
+* admin dashboard for dataset inspection
+* category analytics
+* vector search
+* product mutation history
+* multi-region deployment tuning
+* advanced observability
+
+---
+
+# 🚀 Future Work
+
+* add a visual admin dashboard
+* support advanced filtering combinations
+* add analytics on browsing behavior
+* introduce caching for repeated catalog views
+* expand drift tests for high-concurrency mutation scenarios
+* add export/import support for catalog snapshots
+
+---
+
+# 👨‍💻 Developer
+
+**Ashish Patel**
+
+Focused on:
+
+* backend systems
+* data-intensive APIs
+* performance-aware engineering
+* scalable catalog design
+
+---
+
+# 🌟 Final Note
+
+Sanchvex is built around a simple idea:
+**pagination should remain stable even when the data is not.**
+
+```
+```

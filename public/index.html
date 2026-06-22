@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sanchvex Product Catalog</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <header class="mb-8 border-b border-gray-800 pb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-teal-400 tracking-tight">SANCHVEX</h1>
+                <p class="text-gray-400 text-sm mt-1">High-Performance Cursor Paginated Datastore Simulator</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <label for="categoryFilter" class="text-sm font-medium text-gray-300">Category:</label>
+                <select id="categoryFilter" class="bg-gray-800 border border-gray-700 text-teal-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="">All Categories</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Clothing">Clothing</option>
+                    <option value="Books">Books</option>
+                    <option value="Home & Kitchen">Home & Kitchen</option>
+                    <option value="Sports">Sports</option>
+                </select>
+            </div>
+        </header>
+
+        <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+
+        <div class="mt-12 flex flex-col items-center gap-2">
+            <button id="loadMoreBtn" class="bg-teal-600 hover:bg-teal-500 text-white font-semibold px-6 py-3 rounded shadow transition duration-200 hidden">
+                Load Next Page
+            </button>
+            <p id="statusMsg" class="text-gray-500 text-sm italic mt-2">Loading catalog inventory...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentCursor = null;
+        const limit = 12;
+
+        const grid = document.getElementById('productGrid');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        const statusMsg = document.getElementById('statusMsg');
+        const filter = document.getElementById('categoryFilter');
+
+        async function fetchProducts(append = false) {
+            statusMsg.textContent = "Querying Neon B-Tree Index...";
+            loadMoreBtn.classList.add('hidden');
+
+            let url = `/api/products?limit=${limit}`;
+            if (filter.value) url += `&category=${encodeURIComponent(filter.value)}`;
+            if (currentCursor && append) url += `&cursor=${currentCursor}`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!append) grid.innerHTML = '';
+
+                data.products.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = "bg-gray-800 border border-gray-700 rounded-lg p-5 flex flex-col justify-between hover:border-teal-500/50 transition-all shadow-md";
+                    card.innerHTML = `
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-teal-400 bg-teal-900/40 px-2 py-1 rounded">${p.category}</span>
+                            <h3 class="text-lg font-bold mt-3 text-white truncate">${p.name}</h3>
+                            <p class="text-gray-400 text-xs mt-1">ID Ref: #${p.id}</p>
+                        </div>
+                        <div class="mt-6 flex justify-between items-center pt-3 border-t border-gray-700/50">
+                            <span class="text-xl font-bold text-white">$${parseFloat(p.price).toFixed(2)}</span>
+                            <span class="text-[10px] text-gray-500">${new Date(p.created_at).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                currentCursor = data.nextCursor;
+                
+                if (data.hasNextPage) {
+                    loadMoreBtn.classList.remove('hidden');
+                    statusMsg.textContent = "";
+                } else {
+                    statusMsg.textContent = "Reached end of catalog database.";
+                }
+            } catch (err) {
+                console.error(err);
+                statusMsg.textContent = "Error communicating with server endpoint.";
+            }
+        }
+
+        // Event Handlers
+        loadMoreBtn.addEventListener('click', () => fetchProducts(true));
+        filter.addEventListener('change', () => {
+            currentCursor = null;
+            fetchProducts(false);
+        });
+
+        // Initialize First View
+        fetchProducts();
+    </script>
+</body>
+</html>
